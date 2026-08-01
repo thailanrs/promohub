@@ -33,6 +33,5 @@ export const redisConnectionOptions: RedisOptions = {
  * Shared Redis client connection instance.
  */
 export const redisClient = new Redis(REDIS_URL, {
-  maxRetriesPerRequest: null,
-  enableReadyCheck: false,
+  ...redisConnectionOptions,
 });

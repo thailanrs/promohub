@@ -1,0 +1,43 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: promohub-redis
+    restart: always
+    command: redis-server --appendonly yes
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  promohub-worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.worker
+    container_name: promohub-worker
+    restart: always
+    depends_on:
+      redis:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - DATABASE_URL=${DATABASE_URL}
+      - REDIS_URL=${REDIS_URL:-redis://redis:6379}
+      - ENCRYPTION_SECRET=${ENCRYPTION_SECRET}
+      - NEXT_PUBLIC_APP_URL=${NEXT_PUBLIC_APP_URL}
+      - TELEGRAM_BOT_TOKEN=${TELEGRAM_BOT_TOKEN}
+      - AI_API_KEY=${AI_API_KEY}
+    volumes:
+      - baileys_auth:/app/whatsapp-auth
+
+volumes:
+  redis_data:
+    driver: local
+  baileys_auth:
+    driver: local

@@ -101,11 +101,11 @@ export const SwipeCard: React.FC<SwipeCardProps> = ({ offer, onSwipe, isFront })
       )}
 
       {/* Product Image & Badges */}
-      <div className="relative h-64 w-full bg-slate-950 flex items-center justify-center p-4">
+      <div className="relative h-48 sm:h-56 w-full bg-slate-950/80 flex items-center justify-center p-3 overflow-hidden rounded-t-3xl">
         <img
           src={offer.imageUrl}
           alt={offer.title}
-          className="max-h-full max-w-full object-contain drop-shadow-md"
+          className="h-full w-full object-contain drop-shadow-md rounded-xl"
         />
 
         {/* Top Badges */}

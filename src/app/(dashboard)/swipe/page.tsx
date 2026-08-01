@@ -3,7 +3,7 @@
 import React, { useState } from 'react';
 import { SwipeInbox } from '@/modules/swipe/components/SwipeInbox';
 import { EnrichedOffer } from '@/modules/swipe/types';
-import { Flame, ShieldCheck, Zap } from 'lucide-react';
+import { Flame, ShieldCheck, Zap, Send, X, CheckCircle2 } from 'lucide-react';
 
 const MOCK_OFFERS: EnrichedOffer[] = [
   {
@@ -19,7 +19,7 @@ const MOCK_OFFERS: EnrichedOffer[] = [
     discountedPrice: 269.1,
     discountPercent: 37,
     couponCode: 'ALEXA10',
-    imageUrl: 'https://m.media-amazon.com/images/I/714Rq4k05UL._AC_SL1000_.jpg',
+    imageUrl: 'https://images.unsplash.com/photo-1543512214-318c7553f230',
     aiCopy: '🔥 MENOR PREÇO DO ANO! Echo Dot 5ª Geração com Alexa por apenas R$ 269,10!\n\n⚡️ Aproveite o som potente e controle sua casa inteligente por voz.\n🎟 Use o cupom ALEXA10 no checkout.',
     isOutOfStock: false,
     status: 'pending',
@@ -38,7 +38,7 @@ const MOCK_OFFERS: EnrichedOffer[] = [
     discountedPrice: 2199.0,
     discountPercent: 27,
     couponCode: 'TV100OFF',
-    imageUrl: 'https://http2.mlstatic.com/D_NQ_NP_608149-MLA70554162464_072023-O.webp',
+    imageUrl: 'https://images.unsplash.com/photo-1593784991095-a205069470b6',
     aiCopy: '📺 TELA GIGANTE 4K EM PROMOÇÃO!\nSmart TV Samsung 55 Crystal 4K de R$ 2.999 por R$ 2.199 em até 10x sem juros!\n\n🚀 Frete Grátis com entrega rápida Mercado Livre.',
     isOutOfStock: false,
     status: 'pending',
@@ -57,7 +57,7 @@ const MOCK_OFFERS: EnrichedOffer[] = [
     discountedPrice: 49.9,
     discountPercent: 62,
     couponCode: 'FONE20',
-    imageUrl: 'https://down-br.img.susercontent.com/file/br-11134207-7r98o-lsi50106k2bc4c',
+    imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df',
     aiCopy: '🎧 Fone Bluetooth TWS com 62% OFF por R$ 49,90 na Shopee!\n\n✨ Excelente graves e bateria de até 20 horas de reprodução.\n📦 Frete grátis liberado no app.',
     isOutOfStock: false,
     status: 'pending',
@@ -67,6 +67,10 @@ const MOCK_OFFERS: EnrichedOffer[] = [
 
 export default function SwipePage() {
   const [notification, setNotification] = useState<string | null>(null);
+  const [isTestModalOpen, setIsTestModalOpen] = useState(false);
+  const [testNumber, setTestNumber] = useState('5511999999999');
+  const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'success'>('idle');
+  const [lastSentMsg, setLastSentMsg] = useState<string | null>(null);
 
   const showNotification = (message: string) => {
     setNotification(message);
@@ -85,6 +89,39 @@ export default function SwipePage() {
     window.location.reload();
   };
 
+  const handleSendTestMessage = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setTestStatus('sending');
+
+    try {
+      const res = await fetch('/api/dispatch/test-send', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          destinationJid: testNumber,
+          offer: MOCK_OFFERS[0],
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setTestStatus('success');
+        setLastSentMsg(data.sentMessage);
+        showNotification(`✅ Disparo enviado com sucesso para ${data.recipient}!`);
+        setTimeout(() => {
+          setIsTestModalOpen(false);
+          setTestStatus('idle');
+        }, 2000);
+      } else {
+        alert(data.error || 'Erro ao enviar mensagem de teste');
+        setTestStatus('idle');
+      }
+    } catch {
+      alert('Erro de conexão ao enviar mensagem de teste');
+      setTestStatus('idle');
+    }
+  };
+
   return (
     <main className="min-h-screen bg-slate-950 flex flex-col items-center justify-between p-4 sm:p-6 select-none">
       {/* Top Mobile Bar */}
@@ -101,9 +138,14 @@ export default function SwipePage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-emerald-500/10 border border-emerald-500/20 text-[11px] font-bold text-emerald-400">
-          <ShieldCheck className="w-3.5 h-3.5" />
-          <span>Tenant Ativo</span>
+        <div className="flex items-center gap-2">
+          <button
+            onClick={() => setIsTestModalOpen(true)}
+            className="flex items-center gap-1 px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold shadow-md shadow-indigo-600/30 transition-all"
+          >
+            <Send className="w-3.5 h-3.5" />
+            <span>Testar Envio</span>
+          </button>
         </div>
       </header>
 
@@ -124,6 +166,72 @@ export default function SwipePage() {
           onRefresh={handleRefresh}
         />
       </section>
+
+      {/* Modal Disparo de Teste para Número de WhatsApp */}
+      {isTestModalOpen && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-2xl p-6 shadow-2xl space-y-4">
+            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
+              <div className="flex items-center gap-2 text-indigo-400">
+                <Send className="w-5 h-5" />
+                <h3 className="font-bold text-slate-100 text-base">Disparo de Teste WhatsApp</h3>
+              </div>
+              <button
+                onClick={() => setIsTestModalOpen(false)}
+                className="text-slate-400 hover:text-slate-200"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-xs text-slate-400">
+              Informe o número de WhatsApp de teste para enviar a oferta com formatação completa (markdown, emojis e link encurtado).
+            </p>
+
+            <form onSubmit={handleSendTestMessage} className="space-y-4">
+              <div>
+                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  Número de WhatsApp (DDD + Número)
+                </label>
+                <input
+                  type="text"
+                  value={testNumber}
+                  onChange={(e) => setTestNumber(e.target.value)}
+                  placeholder="5511999999999"
+                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-950 border border-slate-800 text-slate-100 font-mono text-sm focus:outline-none focus:border-indigo-500"
+                  required
+                />
+              </div>
+
+              {lastSentMsg && (
+                <div className="p-3 rounded-xl bg-slate-950 border border-slate-800 text-xs font-mono text-slate-300 whitespace-pre-wrap max-h-32 overflow-y-auto">
+                  {lastSentMsg}
+                </div>
+              )}
+
+              <button
+                type="submit"
+                disabled={testStatus === 'sending'}
+                className="w-full py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold text-sm shadow-lg shadow-indigo-600/30 flex items-center justify-center gap-2"
+              >
+                {testStatus === 'sending' ? (
+                  <span>Enviando mensagem...</span>
+                ) : testStatus === 'success' ? (
+                  <>
+                    <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                    <span>Mensagem Enviada!</span>
+                  </>
+                ) : (
+                  <>
+                    <Send className="w-4 h-4" />
+                    <span>Disparar Oferta de Teste</span>
+                  </>
+                )}
+              </button>
+            </form>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="w-full max-w-md py-3 text-center text-[11px] text-slate-500">

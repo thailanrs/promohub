@@ -17,12 +17,14 @@ function parseRedisUrl(urlStr: string): { host: string; port: number; password?:
 }
 
 const parsedConn = parseRedisUrl(REDIS_URL);
+const isTls = REDIS_URL.startsWith('rediss://');
 
 export const redisConnectionOptions: RedisOptions = {
   host: parsedConn.host,
   port: parsedConn.port,
   username: parsedConn.username,
   password: parsedConn.password,
+  tls: isTls ? {} : undefined,
   maxRetriesPerRequest: null, // Mandatory for BullMQ
   enableReadyCheck: false,
 };

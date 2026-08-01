@@ -1,9 +1,13 @@
 import { NextResponse } from 'next/server';
 import { parseIngestionPayload } from '../../../../modules/ingestion/services/ingestion.service';
 import { processEnrichmentJob } from '../../../../workers';
+import { db } from '../../../../db';
+import { offers } from '../../../../db/schema';
+import { ensureDefaultTenant } from '../../../../db/seed-utils';
 
 export async function POST(request: Request) {
   try {
+    const tenant = await ensureDefaultTenant();
     const body = await request.json();
     const { url, rawText, mode = 'manual' } = body;
 
@@ -18,7 +22,7 @@ export async function POST(request: Request) {
     const parsed = parseIngestionPayload({
       text: fullContent,
       rawUrl: url,
-      tenantId: 'tenant_demo_123',
+      tenantId: tenant?.id || '00000000-0000-4000-a000-000000000000',
     });
 
     if (parsed.extractedUrls.length === 0 && !url) {
@@ -30,10 +34,10 @@ export async function POST(request: Request) {
 
     const targetUrl = url || parsed.extractedUrls[0];
 
-    // Process enrichment pipeline synchronously for UI responsiveness
+    // Process enrichment pipeline
     const result = await processEnrichmentJob(
       {
-        tenantId: 'tenant_demo_123',
+        tenantId: tenant?.id || '00000000-0000-4000-a000-000000000000',
         rawUrl: targetUrl,
         rawText: parsed.cleanText || 'Oferta Ingerida Manualmente',
       },
@@ -46,9 +50,30 @@ export async function POST(request: Request) {
       }
     );
 
+    // Save enriched offer into Supabase DB
+    const [savedOffer] = await db
+      .insert(offers)
+      .values({
+        tenantId: tenant?.id || '00000000-0000-4000-a000-000000000000',
+        canonicalUrl: result.offer.canonicalUrl,
+        affiliateUrl: result.offer.affiliateUrl,
+        shortCode: result.offer.shortCode,
+        store: result.offer.store,
+        title: result.offer.title,
+        originalPrice: result.offer.originalPrice ? String(result.offer.originalPrice) : null,
+        discountedPrice: String(result.offer.discountedPrice),
+        discountPercent: result.offer.discountPercent,
+        couponCode: result.offer.couponCode,
+        imageUrl: result.offer.imageUrl,
+        aiCopy: result.offer.aiCopy,
+        isOutOfStock: false,
+        status: 'pending',
+      })
+      .returning();
+
     return NextResponse.json({
       success: true,
-      offer: result.offer,
+      offer: savedOffer,
       nextStep: result.nextStep,
       extractedUrls: parsed.extractedUrls,
     });

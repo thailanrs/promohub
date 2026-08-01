@@ -1,92 +1,67 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { SwipeInbox } from '@/modules/swipe/components/SwipeInbox';
 import { EnrichedOffer } from '@/modules/swipe/types';
-import { Flame, ShieldCheck, Zap, Send, X, CheckCircle2 } from 'lucide-react';
-
-const MOCK_OFFERS: EnrichedOffer[] = [
-  {
-    id: '11111111-1111-4111-a111-111111111111',
-    tenantId: '00000000-0000-4000-a000-000000000000',
-    pipelineId: '22222222-2222-4222-a222-222222222222',
-    canonicalUrl: 'https://www.amazon.com.br/dp/B09B2SBHQK',
-    affiliateUrl: 'https://www.amazon.com.br/dp/B09B2SBHQK?tag=promohub-20',
-    shortCode: 'p/echot5',
-    store: 'amazon',
-    title: 'Echo Dot 5ª Geração | Smart Speaker com Alexa e som de alta qualidade',
-    originalPrice: 429.0,
-    discountedPrice: 269.1,
-    discountPercent: 37,
-    couponCode: 'ALEXA10',
-    imageUrl: 'https://images.unsplash.com/photo-1543512214-318c7553f230',
-    aiCopy: '🔥 MENOR PREÇO DO ANO! Echo Dot 5ª Geração com Alexa por apenas R$ 269,10!\n\n⚡️ Aproveite o som potente e controle sua casa inteligente por voz.\n🎟 Use o cupom ALEXA10 no checkout.',
-    isOutOfStock: false,
-    status: 'pending',
-    createdAt: new Date(),
-  },
-  {
-    id: '33333333-3333-4333-a333-333333333333',
-    tenantId: '00000000-0000-4000-a000-000000000000',
-    pipelineId: '22222222-2222-4222-a222-222222222222',
-    canonicalUrl: 'https://produto.mercadolivre.com.br/MLB-2000111222',
-    affiliateUrl: 'https://produto.mercadolivre.com.br/MLB-2000111222?utm_source=promohub',
-    shortCode: 'p/tv55ml',
-    store: 'mercadolivre',
-    title: 'Smart TV 55 4K UHD LED Samsung Crystal CU7700 Wi-Fi Bluetooth 3 HDMI',
-    originalPrice: 2999.0,
-    discountedPrice: 2199.0,
-    discountPercent: 27,
-    couponCode: 'TV100OFF',
-    imageUrl: 'https://images.unsplash.com/photo-1593784991095-a205069470b6',
-    aiCopy: '📺 TELA GIGANTE 4K EM PROMOÇÃO!\nSmart TV Samsung 55 Crystal 4K de R$ 2.999 por R$ 2.199 em até 10x sem juros!\n\n🚀 Frete Grátis com entrega rápida Mercado Livre.',
-    isOutOfStock: false,
-    status: 'pending',
-    createdAt: new Date(),
-  },
-  {
-    id: '44444444-4444-4444-a444-444444444444',
-    tenantId: '00000000-0000-4000-a000-000000000000',
-    pipelineId: '22222222-2222-4222-a222-222222222222',
-    canonicalUrl: 'https://shopee.com.br/product/998877/112233',
-    affiliateUrl: 'https://shopee.com.br/product/998877/112233?sub_id=promo123',
-    shortCode: 'p/fonebt',
-    store: 'shopee',
-    title: 'Fone de Ouvido Bluetooth Sem Fio TWS Bateria Duradoura Alta Fidelidade',
-    originalPrice: 129.9,
-    discountedPrice: 49.9,
-    discountPercent: 62,
-    couponCode: 'FONE20',
-    imageUrl: 'https://images.unsplash.com/photo-1590658268037-6bf12165a8df',
-    aiCopy: '🎧 Fone Bluetooth TWS com 62% OFF por R$ 49,90 na Shopee!\n\n✨ Excelente graves e bateria de até 20 horas de reprodução.\n📦 Frete grátis liberado no app.',
-    isOutOfStock: false,
-    status: 'pending',
-    createdAt: new Date(),
-  },
-];
+import { Flame, ShieldCheck, Zap, Send, X, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export default function SwipePage() {
+  const [offers, setOffers] = useState<EnrichedOffer[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [notification, setNotification] = useState<string | null>(null);
   const [isTestModalOpen, setIsTestModalOpen] = useState(false);
   const [testNumber, setTestNumber] = useState('5511999999999');
   const [testStatus, setTestStatus] = useState<'idle' | 'sending' | 'success'>('idle');
   const [lastSentMsg, setLastSentMsg] = useState<string | null>(null);
 
+  useEffect(() => {
+    fetchOffersFromDb();
+  }, []);
+
+  const fetchOffersFromDb = async () => {
+    setIsLoading(true);
+    try {
+      const res = await fetch('/api/offers');
+      const data = await res.json();
+      if (data.offers) {
+        setOffers(data.offers);
+      }
+    } catch {
+      console.error('Erro ao buscar ofertas do banco Supabase');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const showNotification = (message: string) => {
     setNotification(message);
     setTimeout(() => setNotification(null), 3000);
   };
 
-  const handleApprove = (offer: EnrichedOffer) => {
-    showNotification(`🚀 Oferta "${offer.title.substring(0, 30)}..." APROVADA e disparada!`);
+  const handleApprove = async (offer: EnrichedOffer) => {
+    showNotification(`🚀 Oferta "${offer.title.substring(0, 25)}..." APROVADA!`);
+    try {
+      await fetch('/api/offers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: offer.id, status: 'approved' }),
+      });
+    } catch {
+      console.error('Erro ao atualizar status no banco');
+    }
   };
 
-  const handleReject = (offer: EnrichedOffer) => {
-    showNotification(`❌ Oferta "${offer.title.substring(0, 30)}..." DESCARTADA.`);
-  };
-
-  const handleRefresh = () => {
-    window.location.reload();
+  const handleReject = async (offer: EnrichedOffer) => {
+    showNotification(`❌ Oferta "${offer.title.substring(0, 25)}..." DESCARTADA.`);
+    try {
+      await fetch('/api/offers', {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: offer.id, status: 'rejected' }),
+      });
+    } catch {
+      console.error('Erro ao descartar no banco');
+    }
   };
 
   const handleSendTestMessage = async (e: React.FormEvent) => {
@@ -99,7 +74,7 @@ export default function SwipePage() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           destinationJid: testNumber,
-          offer: MOCK_OFFERS[0],
+          offer: offers[0] || null,
         }),
       });
 
@@ -159,12 +134,19 @@ export default function SwipePage() {
 
       {/* Main Swipe Component */}
       <section className="w-full max-w-md my-auto">
-        <SwipeInbox
-          initialOffers={MOCK_OFFERS}
-          onApprove={handleApprove}
-          onReject={handleReject}
-          onRefresh={handleRefresh}
-        />
+        {isLoading ? (
+          <div className="p-12 text-center text-slate-500 flex flex-col items-center gap-2">
+            <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
+            <span>Carregando ofertas pendentes do Supabase...</span>
+          </div>
+        ) : (
+          <SwipeInbox
+            initialOffers={offers}
+            onApprove={handleApprove}
+            onReject={handleReject}
+            onRefresh={fetchOffersFromDb}
+          />
+        )}
       </section>
 
       {/* Modal Disparo de Teste para Número de WhatsApp */}

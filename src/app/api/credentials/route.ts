@@ -1,56 +1,92 @@
 import { NextResponse } from 'next/server';
+import { db } from '../../../db';
+import { tenantAffiliateCredentials } from '../../../db/schema';
+import { ensureDefaultTenant } from '../../../db/seed-utils';
 import { encryptGCM, decryptGCM } from '../../../lib/crypto';
-
-// In-memory credential state
-let currentCredentials = {
-  amazonTag: 'promohub-20',
-  shopeeSubId: 'promohub_tech',
-  shopeeAppId: '1002345',
-  mlUtmSource: 'promohub_deals',
-  mlMattTool: 'matt_9988',
-  awinPublisherId: 'awin_pub_7788',
-};
+import { eq } from 'drizzle-orm';
 
 export async function GET() {
-  // Return masked versions for security display
-  return NextResponse.json({
-    credentials: {
-      amazonTag: currentCredentials.amazonTag,
-      shopeeSubId: currentCredentials.shopeeSubId,
-      shopeeAppId: currentCredentials.shopeeAppId ? '••••' + currentCredentials.shopeeAppId.slice(-4) : '',
-      mlUtmSource: currentCredentials.mlUtmSource,
-      mlMattTool: currentCredentials.mlMattTool,
-      awinPublisherId: currentCredentials.awinPublisherId,
-    },
-  });
+  try {
+    const tenant = await ensureDefaultTenant();
+    if (!tenant) return NextResponse.json({ credentials: {} });
+
+    const credList = await db
+      .select()
+      .from(tenantAffiliateCredentials)
+      .where(eq(tenantAffiliateCredentials.tenantId, tenant.id));
+
+    const result: Record<string, string> = {};
+
+    credList.forEach((c) => {
+      let decrypted = '';
+      try {
+        if (c.encryptedApiKey) {
+          decrypted = decryptGCM(c.encryptedApiKey);
+        }
+      } catch {
+        decrypted = '••••••••';
+      }
+
+      if (c.store === 'amazon') result.amazonTag = decrypted;
+      if (c.store === 'shopee') result.shopeeSubId = decrypted;
+      if (c.store === 'mercadolivre') result.mlUtmSource = decrypted;
+      if (c.store === 'awin') result.awinPublisherId = decrypted;
+    });
+
+    return NextResponse.json({ credentials: result });
+  } catch (error) {
+    console.error('[API Get Credentials Error]', error);
+    return NextResponse.json({ error: 'Erro ao buscar credenciais do banco.' }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
   try {
+    const tenant = await ensureDefaultTenant();
+    if (!tenant) return NextResponse.json({ error: 'Tenant inválido' }, { status: 400 });
+
     const body = await request.json();
+    const { amazonTag, shopeeSubId, mlUtmSource, awinPublisherId } = body;
 
-    currentCredentials = {
-      ...currentCredentials,
-      amazonTag: body.amazonTag ?? currentCredentials.amazonTag,
-      shopeeSubId: body.shopeeSubId ?? currentCredentials.shopeeSubId,
-      shopeeAppId: body.shopeeAppId ?? currentCredentials.shopeeAppId,
-      mlUtmSource: body.mlUtmSource ?? currentCredentials.mlUtmSource,
-      mlMattTool: body.mlMattTool ?? currentCredentials.mlMattTool,
-      awinPublisherId: body.awinPublisherId ?? currentCredentials.awinPublisherId,
-    };
+    const updates = [
+      { store: 'amazon', key: amazonTag },
+      { store: 'shopee', key: shopeeSubId },
+      { store: 'mercadolivre', key: mlUtmSource },
+      { store: 'awin', key: awinPublisherId },
+    ];
 
-    // Encrypt sensitive secrets with AES-256-GCM
-    const encryptedApiKey = encryptGCM(JSON.stringify(currentCredentials));
+    for (const item of updates) {
+      if (item.key) {
+        const encrypted = encryptGCM(item.key);
+
+        const existing = await db
+          .select()
+          .from(tenantAffiliateCredentials)
+          .where(eq(tenantAffiliateCredentials.tenantId, tenant.id));
+
+        const found = existing.find((c) => c.store === item.store);
+
+        if (found) {
+          await db
+            .update(tenantAffiliateCredentials)
+            .set({ encryptedApiKey: encrypted, updatedAt: new Date() })
+            .where(eq(tenantAffiliateCredentials.id, found.id));
+        } else {
+          await db.insert(tenantAffiliateCredentials).values({
+            tenantId: tenant.id,
+            store: item.store,
+            encryptedApiKey: encrypted,
+          });
+        }
+      }
+    }
 
     return NextResponse.json({
       success: true,
-      encryptedSecretHash: encryptedApiKey.split(':')[1] || 'encrypted',
-      message: 'Credenciais de afiliados salvas e criptografadas com AES-256 com sucesso!',
+      message: 'Credenciais salvas e salvas com criptografia AES-256 no banco Supabase com sucesso!',
     });
   } catch (error) {
-    return NextResponse.json(
-      { error: 'Falha ao salvar e criptografar credenciais.' },
-      { status: 500 }
-    );
+    console.error('[API Save Credentials Error]', error);
+    return NextResponse.json({ error: 'Falha ao salvar credenciais no banco.' }, { status: 500 });
   }
 }
